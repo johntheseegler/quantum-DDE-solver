@@ -1,0 +1,618 @@
+# Project: Simplified Classical and Quantum Drift-Diffusion Solvers
+
+## Objective
+
+Create a completely new, simplified implementation of the paper:
+
+**"Quantum Algorithms for Solving a Drift-Diffusion Equation: A Complexity Analysis" — Devereux and Datta.**
+
+The deliverable must be a single, self-contained Jupyter notebook (`.ipynb`).
+
+The purpose is to demonstrate three approaches to solving the same one-dimensional drift-diffusion problem:
+
+1. Classical direct time evolution using finite differences.
+2. Classical FFT diagonalisation.
+3. Quantum Fourier transform (QFT) diagonalisation using an actual Qiskit quantum circuit.
+
+This is an educational reproduction of selected ideas from the paper, not a complete reproduction of every algorithm or theorem.
+
+Prioritise mathematical clarity, simple code, visual results and explainability during an oral presentation.
+
+Do not reuse the architecture or unnecessary complexity of the previous implementation. Rebuild the notebook from scratch.
+
+---
+
+# 1. General requirements
+
+Use:
+
+- Python
+- NumPy
+- SciPy, where useful
+- Matplotlib
+- Qiskit
+- Qiskit Aer
+
+Qiskit must be used to construct and execute the quantum circuit. A purely mathematical NumPy implementation of the QFT is not an acceptable substitute for the quantum implementation.
+
+The notebook must run from top to bottom.
+
+Keep the code straightforward:
+- No unnecessary classes.
+- No complicated software architecture.
+- No excessive helper functions.
+- No unnecessary dependencies.
+- No duplicated calculations.
+- No excessively long code cells.
+
+Every important code cell must be preceded by a Markdown cell explaining the mathematics and purpose of the implementation.
+
+Use clear variable names and comments.
+
+All parameters should be defined in one place.
+
+---
+
+# 2. Problem definition and initial conditions
+
+Use the one-dimensional drift-diffusion equation:
+
+\[
+\frac{\partial p}{\partial t}
+=
+a\frac{\partial p}{\partial x}
++
+D\frac{\partial^2p}{\partial x^2}
+\]
+
+where:
+- \(p(x,t)\) is the probability density.
+- \(a\) is the drift coefficient.
+- \(D\) is the diffusion coefficient.
+
+Use a Gaussian initial distribution:
+
+\[
+p(x,0)=
+\frac{1}{\sqrt{2\pi\sigma_0^2}}
+\exp\left[
+-\frac{(x-x_0)^2}{2\sigma_0^2}
+\right]
+\]
+
+The original paper assumes periodic spatial boundary conditions.
+
+Therefore, use a wrapped Gaussian or a sufficiently wide periodic domain with negligible boundary effects. Clearly state which approach is used.
+
+Provide the analytical solution for validation.
+
+For the infinite-domain Gaussian solution:
+
+\[
+\mu_t=x_0-at
+\]
+
+\[
+\sigma_t^2=\sigma_0^2+2Dt
+\]
+
+The solution is:
+
+\[
+p(x,t)=
+\frac{1}{\sqrt{2\pi\sigma_t^2}}
+\exp\left[
+-\frac{(x-\mu_t)^2}{2\sigma_t^2}
+\right]
+\]
+
+If using a periodic domain, implement the corresponding wrapped version for accurate validation.
+
+Define all parameters in one cell:
+
+- Domain boundaries and length.
+- Number of spatial points \(N\).
+- Spatial step \(\Delta x\).
+- Time step \(\Delta t\).
+- Total simulation time \(T\).
+- Number of time steps \(n_t\).
+- Drift coefficient \(a\).
+- Diffusion coefficient \(D\).
+- Initial centre \(x_0\).
+- Initial standard deviation \(\sigma_0\).
+
+Choose parameters satisfying the explicit finite-difference stability condition.
+
+If interpreting the finite-difference coefficients as random-walk probabilities, ensure they are nonnegative.
+
+Explain the sign convention: with the PDE written above, the Gaussian centre moves towards decreasing \(x\) when \(a>0\).
+
+---
+
+# 3. Method 1 — Classical direct time evolution
+
+Discretise the PDE using forward-time, centred-space finite differences.
+
+Use:
+
+\[
+p_i^{k+1}
+=
+c_0p_i^k+c_+p_{i+1}^k+c_-p_{i-1}^k
+\]
+
+where:
+
+\[
+c_0=1-\frac{2D\Delta t}{\Delta x^2}
+\]
+
+\[
+c_+=
+\frac{a\Delta t}{2\Delta x}
++
+\frac{D\Delta t}{\Delta x^2}
+\]
+
+\[
+c_-=
+-\frac{a\Delta t}{2\Delta x}
++
+\frac{D\Delta t}{\Delta x^2}
+\]
+
+Use periodic indexing.
+
+Construct the spatial evolution matrix \(L\):
+
+\[
+\mathbf p^{k+1}=L\mathbf p^k
+\]
+
+Implement direct time evolution by repeatedly applying this update.
+
+Show:
+- Initial Gaussian.
+- Several intermediate time steps.
+- Final distribution.
+- Comparison with the analytical solution.
+
+Explain:
+- What the spatial index \(i\) represents.
+- What the time index \(k\) represents.
+- How drift and diffusion affect the distribution.
+- Why periodic indexing is required.
+
+Give the computational complexity:
+
+\[
+O(n_tN)
+\]
+
+Do NOT implement:
+- The full block linear system.
+- Conjugate gradient.
+- Condition-number calculations.
+- Other classical algorithms.
+
+---
+
+# 4. Method 2 — Classical FFT diagonalisation
+
+Explain that constant coefficients and periodic boundaries make the evolution matrix circulant.
+
+A circulant matrix can be diagonalised by the discrete Fourier transform:
+
+\[
+L=F^\dagger\Lambda F
+\]
+
+Therefore:
+
+\[
+\boxed{
+\mathbf p(T)=F^\dagger\Lambda^{n_t}F\mathbf p(0)
+}
+\]
+
+Calculate the eigenvalues of the finite-difference evolution matrix.
+
+For the chosen discretisation:
+
+\[
+\lambda_j=
+1-
+\frac{4D\Delta t}{\Delta x^2}
+\sin^2\left(\frac{\pi j}{N}\right)
++
+i\frac{a\Delta t}{\Delta x}
+\sin\left(\frac{2\pi j}{N}\right)
+\]
+
+Use NumPy FFT and inverse FFT to implement the evolution.
+
+The implementation must use the exact same discrete eigenvalues as Method 1.
+
+IMPORTANT:
+- Do not replace the finite-difference eigenvalues with the continuous PDE Fourier propagator.
+- Do not use a different discretisation for this method.
+- The direct evolution and FFT methods must solve exactly the same discrete problem.
+
+Show:
+1. Initial spatial distribution.
+2. Fourier coefficients.
+3. Evolved Fourier coefficients.
+4. Reconstructed final distribution.
+
+Compare the final FFT result with direct time evolution.
+
+Print their numerical difference or relative error.
+
+Explain the computational complexity:
+
+\[
+O(N\log N)
+\]
+
+Clarify that this counts the FFT-based evolution, excluding any separately considered setup costs.
+
+Do not reproduce the full mathematical proof of circulant diagonalisation. Explain the intuition and retain the eigenvalue formula.
+
+---
+
+# 5. Method 3 — Quantum Fourier transform using Qiskit
+
+This section MUST implement and execute an actual quantum circuit using Qiskit and Qiskit Aer.
+
+Do not replace the quantum implementation with NumPy matrix multiplication or a classical statevector calculation.
+
+The circuit must implement the same discrete finite-difference evolution as the classical FFT method.
+
+## 5.1 Quantum state encoding
+
+Use a spatial register with:
+
+\[
+n=\log_2N
+\]
+
+qubits.
+
+For the actual Qiskit circuit demonstration, use:
+
+\[
+N=8,\qquad n=3
+\]
+
+Prepare the initial spatial-register state:
+
+\[
+|\psi_0\rangle=
+\frac{1}{\|\mathbf p_0\|_2}
+\sum_{j=0}^{N-1}p_j^0|j\rangle
+\]
+
+The amplitudes are proportional to the probability-density values themselves, not their square roots.
+
+Explain why the state must be normalised and what this encoding means.
+
+Use Qiskit's state-preparation functionality.
+
+## 5.2 QFT
+
+Apply the QFT to the spatial register:
+
+\[
+|\psi_F\rangle=F|\psi_0\rangle
+\]
+
+Use a proper Qiskit QFT circuit or an equivalent implementation built from Hadamard and controlled-phase gates.
+
+If using a QFT implementation with bit reversal or swaps, ensure the qubit ordering and classical Fourier convention are consistent.
+
+Verify the output against the classical FFT convention.
+
+## 5.3 Non-unitary diagonal evolution
+
+The required spectral evolution is:
+
+\[
+H=\operatorname{diag}
+\left(
+\lambda_0^{n_t},
+\lambda_1^{n_t},
+\ldots,
+\lambda_{N-1}^{n_t}
+\right)
+\]
+
+This operator is generally non-unitary.
+
+A quantum circuit cannot directly apply an arbitrary non-unitary matrix as an ordinary gate.
+
+Implement the operation using an ancilla-assisted unitary dilation.
+
+Define:
+
+\[
+\alpha=\max_j|\lambda_j^{n_t}|
+\]
+
+and:
+
+\[
+K=\frac{H}{\alpha}
+\]
+
+Then \(K\) is a contraction.
+
+Construct a unitary \(U\) acting on the spatial register and ancilla such that:
+
+\[
+\boxed{
+\langle0|_{\mathrm{anc}}U|0\rangle_{\mathrm{anc}}=K
+}
+\]
+
+One valid construction is the unitary dilation:
+
+\[
+U=
+\begin{pmatrix}
+K & \sqrt{I-KK^\dagger}\\
+\sqrt{I-K^\dagger K} & -K^\dagger
+\end{pmatrix}
+\]
+
+with the block ordering chosen consistently with the ancilla basis.
+
+Verify numerically that the ancilla-zero block of the constructed unitary equals \(K\).
+
+Do not invent controlled rotations or phase gates and assume they implement the complex eigenvalues correctly.
+
+If the full unitary is too large or difficult to construct, use a correct small-system construction for \(N=8\), and explain its limitations.
+
+## 5.4 Inverse QFT and postselection
+
+After the diagonal operation, apply the inverse QFT:
+
+\[
+F^\dagger
+\]
+
+The ancilla-zero branch contains the evolved state, up to the scaling factor \(\alpha\).
+
+Measure the ancilla and postselect on:
+
+\[
+|0\rangle_{\mathrm{anc}}
+\]
+
+Explain that postselection extracts the desired non-unitary evolution branch.
+
+Calculate the theoretical postselection probability:
+
+\[
+P(0)=
+\left\|
+K|\psi_F\rangle
+\right\|_2^2
+\]
+
+Compare this with the probability obtained from the Qiskit simulation.
+
+Mention amplitude amplification as a possible way to improve postselection success, but do not implement a full amplitude-amplification algorithm unless it is straightforward and mathematically correct.
+
+## 5.5 Actual Qiskit execution
+
+Use Qiskit Aer to execute the circuit.
+
+Include:
+- State preparation.
+- QFT.
+- Ancilla-assisted diagonal operation.
+- Inverse QFT.
+- Ancilla measurement.
+- Postselection.
+
+Run an ideal statevector or unitary simulation to inspect the amplitudes of the postselected branch.
+
+Also run a finite-shot simulation to demonstrate measurement statistics.
+
+Clearly distinguish:
+
+1. Statevector access: ideal simulation provides the complex amplitudes.
+2. Computational-basis measurement: provides samples according to squared amplitude magnitudes.
+3. Postselection: retains only runs where the ancilla is measured as zero.
+
+Do not claim that ordinary measurements directly return the full signed probability-density vector.
+
+## 5.6 Recovering the final distribution
+
+After postselection, extract the spatial-register amplitudes.
+
+Account for:
+- Normalisation.
+- Global scaling.
+- Global phase.
+- Qubit ordering.
+
+Compare the recovered state against the classical FFT result.
+
+Since the encoded state uses amplitudes proportional to the density vector, recover the density by undoing the L2 normalisation, not by squaring the amplitudes.
+
+For finite-shot measurements, explain that the measurement histogram is not itself the signed density vector.
+
+The ideal statevector result is the primary numerical accuracy comparison; the finite-shot experiment is a separate demonstration of the readout limitation.
+
+---
+
+# 6. Quantum circuit illustration
+
+Include a circuit diagram generated from the actual Qiskit circuit.
+
+Use the \(N=8\) example:
+- Three spatial qubits.
+- One ancilla qubit.
+
+The diagram should clearly show:
+
+1. Initial state preparation.
+2. QFT.
+3. Ancilla-assisted diagonal evolution.
+4. Inverse QFT.
+5. Ancilla measurement.
+
+The diagram must correspond to the circuit that is actually executed.
+
+Do not show conceptual gates that are absent from the implementation.
+
+If the diagonal unitary is implemented as a dense unitary gate, label it clearly as the unitary dilation of the spectral operator.
+
+Also provide a simplified high-level circuit diagram in Markdown if the gate-level circuit becomes too crowded.
+
+---
+
+# 7. Final results and comparison
+
+Produce the following figures:
+
+### Figure 1 — Direct evolution
+
+Show the initial Gaussian and several intermediate distributions up to final time \(T\).
+
+### Figure 2 — Fourier-space evolution
+
+Show the initial Fourier coefficients and their evolved values, preferably using separate magnitude and phase plots if useful.
+
+### Figure 3 — Final distribution comparison
+
+Overlay:
+
+- Analytical solution.
+- Direct finite-difference solution.
+- Classical FFT solution.
+- Qiskit QFT statevector result.
+
+All results must use the same discretisation and final time.
+
+### Figure 4 — Quantum circuit
+
+Display the actual Qiskit circuit for the \(N=8\) example.
+
+### Figure 5 — Complexity ledger
+
+Provide a compact table comparing the three approaches.
+
+Use:
+
+| Method | Core evolution cost |
+|---|---|
+| Direct evolution | \(O(n_tN)\) |
+| Classical FFT | \(O(N\log N)\) |
+| Quantum QFT | QFT transform cost \(O(\log^2N)\) gates, with additional costs |
+
+For the quantum method, separately account for:
+
+- Initial state preparation.
+- QFT and inverse QFT.
+- Ancilla-assisted diagonal operation.
+- Postselection or amplitude amplification.
+- Measurement and output extraction.
+
+Do not claim that the full quantum solver costs only \(O(\log^2N)\).
+
+Clearly state that the small Qiskit demonstration is not evidence of a practical quantum speedup.
+
+---
+
+# 8. What must be excluded
+
+Do NOT implement or explain in detail:
+
+- Conjugate gradient.
+- Full block linear-system formulation.
+- HHL or quantum linear-system algorithms.
+- Hamiltonian simulation.
+- Classical random walk.
+- Quantum random walk.
+- Finance applications.
+- Semiconductor-specific models.
+- Multidimensional PDEs.
+- Generalised higher-dimensional complexity proofs.
+- Full theorem and lemma derivations.
+- Condition-number analysis.
+- Advanced amplitude estimation.
+- Full amplitude amplification unless genuinely necessary for the chosen implementation.
+
+Do not introduce additional algorithms beyond the three specified methods.
+
+---
+
+# 9. Notebook organisation
+
+Use this exact high-level structure:
+
+1. Introduction and mathematical problem.
+2. Parameters and initial Gaussian.
+3. Analytical solution.
+4. Classical direct time evolution.
+5. Classical FFT diagonalisation.
+6. Quantum state preparation.
+7. Qiskit QFT circuit.
+8. Ancilla-assisted eigenvalue evolution.
+9. Qiskit simulation and postselection.
+10. Final comparison and complexity ledger.
+11. Conclusions and limitations.
+
+Keep each section short and self-contained.
+
+Use Markdown explanations before code cells.
+
+Avoid excessive mathematical derivations. Retain only the equations required to understand the implementation.
+
+---
+
+# 10. Validation requirements
+
+Before finishing, verify:
+
+- The initial distribution is normalised.
+- The analytical solution is consistent with the PDE sign convention.
+- The finite-difference coefficients satisfy the chosen stability requirements.
+- Direct evolution and FFT evolution agree numerically.
+- The QFT circuit uses the same eigenvalues as the classical FFT.
+- The QFT and inverse QFT use consistent qubit ordering.
+- The ancilla-zero block of the unitary equals the intended contraction.
+- The theoretical postselection probability matches the ideal simulation.
+- The postselected Qiskit state agrees with the classical FFT state up to global phase and normalisation.
+- The finite-shot measurement results are statistically consistent with the ideal probabilities.
+- The notebook runs from beginning to end without manual intervention.
+
+If a validation check fails, fix the implementation rather than hiding the discrepancy.
+
+---
+
+# 11. Final deliverable
+
+Deliver exactly one Jupyter notebook file.
+
+Do not create a separate report, Python script, module or presentation.
+
+The notebook should be compact, readable and presentation-ready.
+
+The intended audience knows basic numerical methods, Fourier transforms and introductory quantum computing.
+
+The central narrative must be immediately clear:
+
+\[
+\boxed{
+\text{Direct time evolution}
+\longrightarrow
+\text{Classical FFT}
+\longrightarrow
+\text{Quantum QFT}
+}
+\]
+
+The final notebook must demonstrate all three methods on the same problem, with the third method genuinely constructed and executed using Qiskit.
